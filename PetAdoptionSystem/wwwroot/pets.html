@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pets - Pet Adoption</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="container">
+        <!-- User/Admin Status Banner -->
+        <div id="userStatus" class="user-status"></div>
+
+        <!-- NAVBAR-LIKE BUTTON GROUP -->
+        <nav class="nav-bar">
+            <button id="seeAdoptersBtn" style="display:none;" onclick="window.location.href='adopters.html'">See All Adopters</button>
+            <button id="myProfileBtn" style="display:none;" onclick="window.location.href='profile.html'">My Profile</button>
+            <button id="myRequestsBtn" style="display:none;" onclick="window.location.href='adoption_requests.html'">My Adoption Requests</button>
+            <button id="allRequestsBtn" style="display:none;" onclick="window.location.href='all_adoption_requests.html'">All Adoption Requests</button>
+
+            <button onclick="logout()">Logout</button>
+            <button onclick="loadPets()">Refresh List</button>
+            <button id="addPetBtn" style="display:none;" onclick="showAddPetForm()">Add New Pet</button>
+        </nav>
+
+        <h1>Available Pets</h1>
+        <ul id="petsList" class="pets-list"></ul>
+
+        <h1>Adopted Pets</h1>
+        <ul id="adoptedPetsList" class="pets-list"></ul>
+    </div>
+
+  <script src="auth.js"></script>
+  <script>
+    window.onload = function () {
+      const userStatus = document.getElementById("userStatus");
+
+      if (isAdmin()) {
+       document.getElementById('seeAdoptersBtn').style.display = 'inline-block';
+        document.getElementById('allRequestsBtn').style.display = 'inline-block';
+        userStatus.textContent = "🐾 Welcome Back, Admin! 🐾";
+        userStatus.classList.add("admin-status");
+      } else {
+        document.getElementById('myProfileBtn').style.display = 'inline-block';
+        document.getElementById('myRequestsBtn').style.display = 'inline-block';
+        userStatus.textContent = "🐾 Welcome Back, Friend! 🐾";
+        userStatus.classList.add("user-status");
+      }
+
+      loadPets();
+
+      // Modal close handlers (safe to keep)
+      document.getElementById("closeModal").onclick = () => {
+        document.getElementById("addPetModal").style.display = "none";
+      };
+      document.getElementById("closeEditModal").onclick = () => {
+        document.getElementById("editPetModal").style.display = "none";
+      };
+      window.onclick = function (event) {
+        if (event.target === document.getElementById("addPetModal")) {
+          document.getElementById("addPetModal").style.display = "none";
+        }
+        if (event.target === document.getElementById("editPetModal")) {
+          document.getElementById("editPetModal").style.display = "none";
+        }
+      };
+
+      // Add Pet Form submission
+      document.getElementById("addPetForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        const photoUrl = document.getElementById("petPhotoUrl").value.trim();
+
+        const petData = {
+          name: document.getElementById("petName").value.trim(),
+          species: document.getElementById("petSpecies").value.trim(),
+          age: parseInt(document.getElementById("petAge").value),
+          isAdopted: false,
+          photoUrl: photoUrl
+        };
+
+        if (!petData.name || !petData.species || isNaN(petData.age) || !photoUrl) {
+          alert("Please fill all fields including a valid Photo URL.");
+          return;
+        }
+
+        try {
+          const response = await fetch(`${apiBaseUrl}/pets`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${getToken()}`
+            },
+            body: JSON.stringify(petData)
+          });
+
+          if (response.ok) {
+            alert("Pet added successfully!");
+            document.getElementById("addPetModal").style.display = "none";
+            loadPets();
+            document.getElementById("addPetForm").reset();
+          } else {
+            const errorData = await response.json();
+            alert("Failed to add pet: " + (errorData.message || JSON.stringify(errorData)));
+          }
+        } catch (error) {
+          alert("Error adding pet: " + error.message);
+        }
+      });
+
+      // Edit Pet Form submission
+      document.getElementById("editPetForm").addEventListener("submit", async function(event) {
+        event.preventDefault();
+
+        const photoUrl = document.getElementById("editPetPhotoUrl").value.trim();
+
+        const id = parseInt(document.getElementById("editPetId").value);
+        const petData = {
+          id,
+          name: document.getElementById("editPetName").value.trim(),
+          species: document.getElementById("editPetSpecies").value.trim(),
+          age: parseInt(document.getElementById("editPetAge").value),
+          isAdopted: false,
+          photoUrl: photoUrl
+        };
+
+        if (!petData.name || !petData.species || isNaN(petData.age) || !photoUrl) {
+          alert("Please fill all fields including a valid Photo URL.");
+          return;
+        }
+
+        try {
+          const response = await fetch(`${apiBaseUrl}/pets/${id}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${getToken()}`
+            },
+            body: JSON.stringify(petData)
+          });
+
+          if (response.ok) {
+            alert("Pet updated successfully!");
+            document.getElementById("editPetModal").style.display = "none";
+            loadPets();
+          } else {
+            const contentType = response.headers.get("Content-Type");
+            let errorText = "Unknown error";
+
+            if (contentType && contentType.includes("application/json")) {
+              const errorData = await response.json();
+              errorText = errorData.message || JSON.stringify(errorData);
+            } else {
+              errorText = await response.text();
+            }
+
+            alert("Failed to update pet: " + errorText);
+          }
+        } catch (error) {
+          alert("Error updating pet: " + error.message);
+        }
+      });
+    };
+
+    function showAddPetForm() {
+      document.getElementById("addPetModal").style.display = "flex";
+    }
+
+      async function loadPets() {
+          // Fetch available pets
+          const availablePets = await authGet("/pets/available");
+          // Fetch adopted pets
+          const adoptedPets = await authGet("/pets/adopted");
+
+          // Get UL elements
+          const availableList = document.getElementById("petsList");      // existing
+          const adoptedList = document.getElementById("adoptedPetsList");  // new
+
+          // Clear both lists before adding new items
+          availableList.innerHTML = "";
+          adoptedList.innerHTML = "";
+
+          // Add available pets
+          if (availablePets) {
+              availablePets.forEach(pet => {
+                  const item = createPetListItem(pet, false); // false means not adopted
+                  availableList.appendChild(item);
+              });
+          }
+
+          // Add adopted pets
+          if (adoptedPets) {
+              adoptedPets.forEach(pet => {
+                  const item = createPetListItem(pet, true); // true means adopted
+                  adoptedList.appendChild(item);
+              });
+          }
+
+          // Show "Add Pet" button only for admins, same as before
+          document.getElementById("addPetBtn").style.display = isAdmin() ? "inline-block" : "none";
+      }
+      function createPetListItem(pet, isAdopted) {
+          const item = document.createElement("li");
+
+          // Pet photo
+          if (pet.photoUrl && pet.photoUrl.trim() !== "") {
+              const img = document.createElement("img");
+              img.src = pet.photoUrl;
+              img.alt = pet.name + " photo";
+              img.classList.add("pet-photo");
+              item.appendChild(img);
+          }
+
+          // Pet name & species
+          const petNameSpan = document.createElement("span");
+          petNameSpan.classList.add("pet-name");
+          petNameSpan.textContent = `${pet.name} - ${pet.species}`;
+          item.appendChild(petNameSpan);
+
+          // User buttons
+          if (!isAdmin()) {
+              if (!isAdopted) {
+                  const adoptBtn = document.createElement("button");
+                  adoptBtn.textContent = "Adopt";
+                  adoptBtn.classList.add("action-btn");
+                  adoptBtn.onclick = () => adoptPet(pet.id);
+                  item.appendChild(adoptBtn);
+              } else {
+                  const adoptedBtn = document.createElement("button");
+                  adoptedBtn.textContent = "Adopted";
+                  adoptedBtn.disabled = true;
+                  adoptedBtn.classList.add("disabled-btn");
+                  item.appendChild(adoptedBtn);
+              }
+          }
+
+          // Admin buttons
+          if (isAdmin()) {
+              const editBtn = document.createElement("button");
+              editBtn.textContent = "Edit";
+              editBtn.classList.add("edit-btn");
+              editBtn.onclick = () => editPet(pet.id);
+              item.appendChild(editBtn);
+
+              const deleteBtn = document.createElement("button");
+              deleteBtn.textContent = "Delete";
+              deleteBtn.classList.add("delete-btn");
+              deleteBtn.onclick = () => deletePet(pet.id);
+              item.appendChild(deleteBtn);
+          }
+
+          return item;
+      }
+
+
+    // The following functions remain the same
+    async function editPet(id) {
+      try {
+        const response = await fetch(`${apiBaseUrl}/pets/${id}`, {
+          headers: { "Authorization": `Bearer ${getToken()}` }
+        });
+        const pet = await response.json();
+        document.getElementById("editPetId").value = pet.id;
+        document.getElementById("editPetName").value = pet.name;
+        document.getElementById("editPetSpecies").value = pet.species;
+        document.getElementById("editPetAge").value = pet.age;
+        document.getElementById("editPetPhotoUrl").value = pet.photoUrl || "";
+        document.getElementById("editPetModal").style.display = "flex";
+      } catch {
+        alert("Failed to load pet.");
+      }
+    }
+
+    async function deletePet(id) {
+      if (!confirm("Are you sure you want to delete this pet?")) return;
+
+      try {
+        const response = await fetch(`${apiBaseUrl}/pets/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${getToken()}` }
+        });
+
+        if (response.status === 204) {
+          alert("Pet deleted.");
+          loadPets();
+        } else {
+          const error = await response.json();
+          alert("Failed to delete: " + (error.message || JSON.stringify(error)));
+        }
+      } catch (err) {
+        alert("Error deleting pet: " + err.message);
+      }
+    }
+
+    async function adoptPet(petId) {
+      if (!confirm("Are you sure you want to send an adoption request for this pet?")) return;
+
+      try {
+        const response = await fetch(`${apiBaseUrl}/adoptionrequests`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${getToken()}`
+          },
+          body: JSON.stringify({ petId: petId })
+        });
+
+        if (response.status === 409) {
+          alert("You have already sent a request for this pet.");
+          return;
+        }
+
+        if (response.ok) {
+          alert("Adoption request sent successfully!");
+          loadPets();
+        } else {
+          const errorText = await response.text();
+          alert("Failed to send adoption request: " + errorText);
+        }
+      } catch (error) {
+        alert("Error: " + error.message);
+      }
+    }
+  </script>
+
+  <!-- Add Modal -->
+  <div id="addPetModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <span id="closeModal" class="close">&times;</span>
+      <h2>Add New Pet</h2>
+      <form id="addPetForm">
+        <label>Name:</label><br />
+        <input type="text" id="petName" required /><br /><br />
+        <label>Species:</label><br />
+        <input type="text" id="petSpecies" required /><br /><br />
+        <label>Age:</label><br />
+        <input type="number" id="petAge" min="0" required /><br /><br />
+        <label>Photo URL:</label><br />
+        <input type="url" id="petPhotoUrl" placeholder="http://example.com/photo.jpg" required />
+
+        <button type="submit">Add Pet</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="editPetModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <span id="closeEditModal" class="close">&times;</span>
+      <h2>Edit Pet</h2>
+      <form id="editPetForm">
+        <input type="hidden" id="editPetId" />
+        <label>Name:</label><br />
+        <input type="text" id="editPetName" required /><br /><br />
+        <label>Species:</label><br />
+        <input type="text" id="editPetSpecies" required /><br /><br />
+        <label>Age:</label><br />
+        <input type="number" id="editPetAge" min="0" required /><br /><br />
+        <label>Photo URL:</label><br />
+        <input type="url" id="editPetPhotoUrl" placeholder="http://example.com/photo.jpg" required />
+
+        <button type="submit">Save Changes</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

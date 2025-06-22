@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Profile - Pet Adoption</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <div id="statusBanner" class="user-status" style="display:none;"></div>
+
+    <h1>My Profile</h1>
+
+    <div id="profileContent">
+      <p>Loading profile...</p>
+    </div>
+
+    <button id="editProfileBtn" style="display:none;">Edit Profile</button>
+    <button id="backToPetsBtn">Back to Adoption Page</button>
+    <button id="logoutBtn">Logout</button>
+  </div>
+
+  <script src="auth.js"></script>
+  <script>
+    window.getToken = getToken;
+    window.logout = logout;
+
+    async function loadProfile() {
+      const profileDiv = document.getElementById('profileContent');
+      const statusBanner = document.getElementById('statusBanner');
+      const editBtn = document.getElementById('editProfileBtn');
+
+      try {
+        const response = await fetch(apiBaseUrl + '/adopters/me', {
+          headers: { "Authorization": "Bearer " + getToken() }
+        });
+
+        if (response.status === 401) {
+          profileDiv.innerHTML = "<p>You are not logged in. Please <a href='index.html'>login</a>.</p>";
+          editBtn.style.display = 'none';
+          return;
+        }
+
+        if (!response.ok) {
+          profileDiv.innerHTML = "<p>Failed to load profile. Please try again later.</p>";
+          editBtn.style.display = 'none';
+          return;
+        }
+
+        const adopter = await response.json();
+        console.log("Adopter from /me:", adopter);
+
+        statusBanner.className = '';
+        if (adopter.role && adopter.role.toLowerCase() === 'admin') {
+          statusBanner.textContent = "Logged in as Admin";
+          statusBanner.classList.add('admin-status');
+        } else {
+          statusBanner.textContent = "🐾 Welcome Back, Friend! 🐾";
+          statusBanner.classList.add('user-status');
+        }
+        statusBanner.style.display = 'block';
+
+        let html = `
+          <p><strong>Full Name:</strong> ${adopter.fullName}</p>
+          <p><strong>Email:</strong> ${adopter.email}</p>
+          <p><strong>Role:</strong> ${adopter.role}</p>
+        `;
+
+        if (adopter.adoptedPets && adopter.adoptedPets.length > 0) {
+          html += `<h2>My Adopted Pets</h2><ul id="petsList">`;
+
+          adopter.adoptedPets.forEach(pet => {
+            const adoptionDate = pet.adoptionDate ? new Date(pet.adoptionDate).toLocaleDateString() : 'N/A';
+            html += `
+              <li>
+                <img src="${pet.photoUrl || 'default-pet.png'}" alt="${pet.name}" class="pet-photo" />
+                <div class="pet-name">
+                  <strong>${pet.name}</strong><br/>
+                  Species: ${pet.species}<br/>
+                  Adopted on: ${adoptionDate}
+                </div>
+              </li>
+            `;
+          });
+
+          html += `</ul>`;
+        } else {
+          html += `<p><em>You have not adopted any pets yet.</em></p>`;
+        }
+
+        profileDiv.innerHTML = html;
+        editBtn.style.display = 'inline-block';
+
+        editBtn.onclick = () => showEditForm(adopter);
+
+      } catch (error) {
+        profileDiv.innerHTML = `<p>Error loading profile: ${error.message}</p>`;
+        editBtn.style.display = 'none';
+      }
+    }
+
+    function showEditForm(adopter) {
+      const profileDiv = document.getElementById('profileContent');
+      const editBtn = document.getElementById('editProfileBtn');
+      editBtn.style.display = 'none';
+
+      profileDiv.innerHTML = `
+        <form id="editProfileForm">
+          <label for="fullName">Full Name:</label><br/>
+          <input type="text" id="fullName" name="fullName" value="${adopter.fullName}" required /><br/><br/>
+
+          <label for="email">Email:</label><br/>
+          <input type="email" id="email" name="email" value="${adopter.email}" required /><br/><br/>
+
+          <div id="formMessage" style="color:red; margin-bottom:10px;"></div>
+
+          <button type="submit">Save Changes</button>
+          <button type="button" id="cancelEditBtn">Cancel</button>
+        </form>
+      `;
+
+      document.getElementById('cancelEditBtn').onclick = () => {
+        loadProfile();
+      };
+
+      document.getElementById('editProfileForm').onsubmit = async (event) => {
+        event.preventDefault();
+
+        const updatedFullName = document.getElementById('fullName').value.trim();
+        const updatedEmail = document.getElementById('email').value.trim();
+
+        if (!updatedFullName || !updatedEmail) {
+          document.getElementById('formMessage').textContent = 'Please fill all required fields.';
+          return;
+        }
+
+        document.getElementById('formMessage').textContent = '';
+
+        try {
+          const response = await fetch(apiBaseUrl + '/adopters/' + adopter.id, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + getToken(),
+            },
+            body: JSON.stringify({
+              id: adopter.id,
+              fullName: updatedFullName,
+              email: updatedEmail,
+              role: adopter.role
+            }),
+          });
+
+          if (response.status === 400) {
+            const err = await response.text();
+            document.getElementById('formMessage').textContent = 'Bad Request: ' + err;
+            return;
+          }
+          if (response.status === 403) {
+            document.getElementById('formMessage').textContent = 'You do not have permission to update this profile.';
+            return;
+          }
+          if (!response.ok) {
+            document.getElementById('formMessage').textContent = 'Failed to update profile. Try again.';
+            return;
+          }
+
+          loadProfile();
+
+        } catch (error) {
+          document.getElementById('formMessage').textContent = 'Error: ' + error.message;
+        }
+      };
+    }
+
+    document.getElementById('backToPetsBtn').addEventListener('click', () => {
+      window.location.href = 'pets.html';
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      logout();
+      window.location.href = 'index.html';
+    });
+
+    window.onload = loadProfile;
+  </script>
+</body>
+</html>

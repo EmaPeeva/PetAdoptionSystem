@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>All Adoption Requests</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="container">
+        <!-- Modal for messages -->
+        <div id="messageModal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span id="modalClose" class="close">&times;</span>
+                <p id="modalMessage"></p>
+            </div>
+        </div>
+
+        <h1>All Adoption Requests (Admin)</h1>
+
+        <div class="button-group">
+            <button onclick="window.location.href='pets.html'">Back to Pets</button>
+        </div>
+
+        <table id="requestsTable">
+            <thead>
+                <tr>
+                    <th>Pet</th>
+                    <th>Requested By</th>
+                    <th>Requested At</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="requestsTableBody"></tbody>
+        </table>
+    </div>
+
+  <script src="auth.js"></script>
+  <script>
+    window.onload = async function () {
+      if (!isAdmin()) {
+        alert("Access denied.");
+        window.location.href = "pets.html";
+        return;
+      }
+
+      const requests = await authGet("/adoptionrequests");
+      const tbody = document.getElementById("requestsTableBody");
+      tbody.innerHTML = "";
+
+      requests.forEach(req => {
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+          <td>${req.pet.name} (${req.pet.species})</td>
+          <td>${req.adopter.fullName} (${req.adopter.email})</td>
+          <td>${new Date(req.requestedAt).toLocaleString()}</td>
+          <td>${req.status}</td>
+          <td>
+            ${req.status === "Pending" ? `
+              <button class="approve-btn" onclick="updateStatus(${req.id}, 'Approved')">Approve</button>
+              <button class="reject-btn" onclick="updateStatus(${req.id}, 'Rejected')">Reject</button>
+            ` : ''}
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    };
+      function showMessageModal(message) {
+          const modal = document.getElementById("messageModal");
+          const modalMsg = document.getElementById("modalMessage");
+          const modalClose = document.getElementById("modalClose");
+
+          modalMsg.textContent = message;
+          modal.style.display = "flex";
+
+          // Close on click of X
+          modalClose.onclick = () => {
+              modal.style.display = "none";
+          };
+
+          // Close if clicked outside the modal content
+          window.onclick = (event) => {
+              if (event.target === modal) {
+                  modal.style.display = "none";
+              }
+          };
+      }
+
+      async function updateStatus(id, status) {
+          if (!confirm(`Are you sure you want to mark this request as ${status}?`)) return;
+
+          try {
+              const response = await fetch(`${apiBaseUrl}/adoptionrequests/${id}`, {
+                  method: "PUT",
+                  headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${getToken()}`
+                  },
+                  body: JSON.stringify({ status })
+              });
+
+              if (response.ok) {
+                  const data = await response.json();
+                  showMessageModal(data.message || "Status updated!");
+                  // Optionally refresh list after a delay so user can read the message:
+                  setTimeout(() => location.reload(), 2500);
+              } else {
+                  showMessageModal("Failed to update status.");
+              }
+          } catch (error) {
+              showMessageModal("Error updating status: " + error.message);
+          }
+      }
+  </script>
+
+</body>
+</html>

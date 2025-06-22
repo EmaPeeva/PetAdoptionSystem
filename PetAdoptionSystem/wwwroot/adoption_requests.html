@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Adoption Requests</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>My Adoption Requests</h1>
+    <div id="requestTable">Loading...</div>
+    <div class="button-group">
+      <button onclick="window.location.href='pets.html'">Back to Pets</button>
+    </div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script>
+    async function loadRequests() {
+      const isAdminUser = isAdmin();
+      const endpoint = isAdminUser ? "/adoptionrequests" : "/adoptionrequests/mine";
+      const requests = await authGet(endpoint);
+
+      const requestTable = document.getElementById("requestTable");
+
+      if (!requests) {
+        requestTable.textContent = "Failed to load requests.";
+        return;
+      }
+
+      if (requests.length === 0) {
+        requestTable.textContent = "No adoption requests found.";
+        return;
+      }
+
+      const table = document.createElement("table");
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th>Pet</th>
+            <th>Requested At</th>
+            <th>Status</th>
+            ${isAdminUser ? "<th>Actions</th>" : ""}
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+
+      const tbody = table.querySelector("tbody");
+
+      requests.forEach(req => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${req.pet.name} (${req.pet.species})</td>
+          <td>${new Date(req.requestedAt).toLocaleString()}</td>
+          <td class="${req.status.toLowerCase()}">${req.status}</td>
+          ${isAdminUser ? `
+            <td>
+              <select onchange="updateStatus(${req.id}, this.value)">
+                <option disabled selected>Change</option>
+                <option value="Approved">Approve</option>
+                <option value="Rejected">Reject</option>
+              </select>
+            </td>` : ""}
+        `;
+        tbody.appendChild(row);
+      });
+
+      requestTable.innerHTML = "";
+      requestTable.appendChild(table);
+    }
+
+    async function updateStatus(id, newStatus) {
+      if (!confirm(`Are you sure you want to mark this request as ${newStatus}?`)) {
+        return;
+      }
+
+      const token = getToken();
+      try {
+        const response = await fetch(`${apiBaseUrl}/adoptionrequests/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: newStatus })
+        });
+
+        if (response.ok) {
+          alert("Status updated!");
+          loadRequests();
+        } else {
+          alert("Failed to update status.");
+        }
+      } catch (err) {
+        alert("Error updating status: " + err.message);
+      }
+    }
+
+    window.onload = loadRequests;
+  </script>
+</body>
+</html>

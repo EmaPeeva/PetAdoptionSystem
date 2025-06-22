@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Adopters List - Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>All Adopters</h1>
+    <button onclick="window.location.href='pets.html'">← Back to Pets</button>
+    <table id="adoptersTable" border="1">
+      <thead>
+        <tr>
+          <th>Full Name</th>
+          <th>Email</th>
+          <th>Role</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script src="auth.js"></script>
+  <script>
+    const tableBody = document.querySelector("#adoptersTable tbody");
+
+    window.onload = async function () {
+      if (!isAdmin()) {
+        alert("You are not authorized to view this page.");
+        window.location.href = "index.html";
+        return;
+      }
+
+      try {
+        const adopters = await authGet("/adopters");
+        tableBody.innerHTML = "";
+
+        adopters.forEach(adopter => {
+          const row = document.createElement("tr");
+
+         row.innerHTML = `
+  <td>${adopter.fullName}</td>
+  <td>${adopter.email}</td>
+  <td>${adopter.role}</td>
+`;
+
+
+          tableBody.appendChild(row);
+        });
+      } catch (err) {
+        alert("Failed to load adopters: " + err.message);
+      }
+    };
+
+    
+  </script>
+</body>
+</html>

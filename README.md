@@ -176,7 +176,7 @@ Contributions are welcome! Please fork the repository and submit a pull request.
 ## Contact
 
 For questions or suggestions, please open an issue or contact via GitHub profile:
-[https://github.com/AnaMarijaTofilovska](https://github.com/AnaMarijaTofilovska)
+[https://github.com/EmaPeeva](https://github.com/EmaPeeva) 
 
 ---
 

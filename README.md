@@ -96,7 +96,7 @@ Example connection string format:
 1. **Clone the repository:**
 
 ```bash
-git clone https://github.com/AnaMarijaTofilovska/PetAdoptionSystem.git
+git clone https://github.com/EmaPeeva/PetAdoptionSystem.git
 cd PetAdoptionSystem
 ```
 
